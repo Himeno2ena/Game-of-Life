@@ -50,11 +50,38 @@ def draw_ui(screen, survive_min, survive_max, birth_min, birth_max, is_running, 
     # 绘制应用按钮
     draw_button(screen, ui_x + 100, 170, 80, 30, "Apply")
 
-def draw_slider(screen, x, y, width, height, value, max_value):
+    # 绘制保存按钮
+    draw_button(screen, ui_x, 210, 80, 30, "Save")
+
+    # 绘制加载按钮
+    draw_button(screen, ui_x + 100, 210, 80, 30, "Load")
+
+    # 绘制清空按钮
+    draw_button(screen, ui_x, 250, 180, 30, "Clear")
+
+def draw_slider(screen, x, y, width, height, value, max_value, is_vertical=False):
     """绘制滑块"""
     pygame.draw.rect(screen, COLOR_SLIDER, (x, y, width, height))
-    slider_pos = x + (value / max_value) * width
-    pygame.draw.rect(screen, COLOR_BUTTON, (slider_pos - 5, y, 10, height))
+    if is_vertical:
+        slider_pos = y + (value / max_value) * height
+        pygame.draw.rect(screen, COLOR_BUTTON, (x, slider_pos - 5, width, 10))
+    else:
+        slider_pos = x + (value / max_value) * width
+        pygame.draw.rect(screen, COLOR_BUTTON, (slider_pos - 5, y, 10, height))
+
+def save_grid_state(grid, filename="grid_state.npy"):
+    """保存当前网格状态到文件"""
+    np.save(filename, grid.cells)
+    print(f"Grid state saved to {filename}")
+
+def load_grid_state(grid, filename="grid_state.npy"):
+    """从文件加载网格状态"""
+    try:
+        grid.cells = np.load(filename)
+        grid.height, grid.width = grid.cells.shape
+        print(f"Grid state loaded from {filename}")
+    except FileNotFoundError:
+        print(f"File {filename} not found.")
 
 def main():
     # 计算窗口大小
@@ -88,6 +115,9 @@ def main():
     is_dragging_horizontal = False  # 是否正在拖动水平滑块
     is_dragging_vertical = False  # 是否正在拖动垂直滑块
 
+    # 鼠标拖动状态
+    is_dragging_mouse = False  # 是否正在拖动鼠标设置细胞
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -107,6 +137,7 @@ def main():
                     # 切换细胞状态
                     if 0 <= grid_x < grid.width and 0 <= grid_y < grid.height:
                         grid.cells[grid_y, grid_x] = 1 - grid.cells[grid_y, grid_x]
+                        is_dragging_mouse = True  # 开始拖动鼠标
 
                 # 处理生存规则最小值的按钮
                 elif ui_x + 120 <= x <= ui_x + 150 and 10 <= y <= 40:  # "+" 按钮
@@ -141,16 +172,30 @@ def main():
                     current_survive_rule = pending_survive_rule.copy()
                     current_birth_rule = pending_birth_rule.copy()
 
-                # 处理滑块点击
-                if window_width - UI_WIDTH <= x <= window_width and window_height - 20 <= y <= window_height:
+                # 处理保存按钮
+                elif ui_x <= x <= ui_x + 80 and 210 <= y <= 240:
+                    save_grid_state(grid)  # 保存当前网格状态
+
+                # 处理加载按钮
+                elif ui_x + 100 <= x <= ui_x + 180 and 210 <= y <= 240:
+                    load_grid_state(grid)  # 加载网格状态
+
+                # 处理清空按钮
+                elif ui_x <= x <= ui_x + 180 and 250 <= y <= 280:
+                    grid.cells = np.zeros((grid.height, grid.width), dtype=int)  # 清空网格
+
+                # 处理水平滑块点击
+                if 0 <= x <= window_width - UI_WIDTH and window_height - 20 <= y <= window_height:
                     is_dragging_horizontal = True
-                elif window_width - 20 <= x <= window_width and 0 <= y <= window_height - 20:
+                # 处理垂直滑块点击
+                elif window_width - UI_WIDTH - 20 <= x <= window_width - UI_WIDTH and 0 <= y <= window_height:
                     is_dragging_vertical = True
 
             elif event.type == pygame.MOUSEBUTTONUP:
-                # 停止拖动滑块
+                # 停止拖动滑块和鼠标
                 is_dragging_horizontal = False
                 is_dragging_vertical = False
+                is_dragging_mouse = False
 
             elif event.type == pygame.MOUSEMOTION:
                 if is_dragging_horizontal:
@@ -159,6 +204,15 @@ def main():
                 elif is_dragging_vertical:
                     # 更新垂直滚动偏移
                     scroll_y = max(0, min(grid.height * CELL_SIZE - window_height, scroll_y + event.rel[1]))
+                elif is_dragging_mouse and event.buttons[0]:  # 左键拖动
+                    x, y = event.pos
+                    if x < window_width - UI_WIDTH and y < window_height:
+                        # 计算点击的网格坐标
+                        grid_x = (x + scroll_x) // CELL_SIZE
+                        grid_y = (y + scroll_y) // CELL_SIZE
+                        # 设置细胞状态为存活
+                        if 0 <= grid_x < grid.width and 0 <= grid_y < grid.height:
+                            grid.cells[grid_y, grid_x] = 1
 
             elif event.type == pygame.VIDEORESIZE:
                 # 窗口大小变化时调整网格和 UI 的显示区域
@@ -203,7 +257,7 @@ def main():
             slider_height = visible_height
             slider_value = scroll_y
             slider_max = grid.height * CELL_SIZE - visible_height
-            draw_slider(screen, window_width - 20, 0, 20, slider_height, slider_value, slider_max)
+            draw_slider(screen, window_width - UI_WIDTH - 20, 0, 20, slider_height, slider_value, slider_max, is_vertical=True)
 
         pygame.display.flip()
         clock.tick(10)  # 控制帧率

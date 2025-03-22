@@ -8,7 +8,7 @@ INIT_GRID_HEIGHT = 60
 CELL_SIZE = 10
 
 # UI 区域宽度
-UI_WIDTH = 200
+UI_WIDTH = 250
 
 # 默认规则
 DEFAULT_SURVIVE_MIN = 2  # 默认生存规则最小细胞数
